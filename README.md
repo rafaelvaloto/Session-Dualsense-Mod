@@ -57,20 +57,6 @@ A tailored experience specifically designed for *Session: Skate Sim*. This is no
 
 5.  Connect your DualSense (USB or Bluetooth) and launch the game!
 
----
-
-## 🎧 Generic Audio Haptics Mod (Universal)
-
-This version is a standalone injector that enables **Audio Haptics** for any game, based on the OS default audio device.
-
-* **Best For:** Games that natively support DualSense input but lack haptics over Bluetooth, or any game where you want sound-reactive vibration.
-* **Limitations:** This version does **not** control Adaptive Triggers, only Haptic Feedback.
-
-### How to Use
-1.  Inject the DLL into the target process (using your preferred injector or included loader).
-2.  Ensure your DualSense is the default audio output device (or configured correctly in your sound settings).
-
----
 
 ## 🛠️ For Developers: Build Your Own
 

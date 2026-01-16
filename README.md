@@ -23,19 +23,18 @@ This mod brings **native DualSense support** to Session: Skate Sim on PC. It com
    * **Turning Resistance:** Triggers stiffen based on your board's inclination and truck tightness (turning physics).
    * **Impact Feedback:** Reacts to landing heavy drops.
 * **Native Connection:** Works via standard Bluetooth or USB.
-
 ---
-
-> [!IMPORTANT] Disable Steam Input
+> [!IMPORTANT]
 > For this mod to work, the game must communicate directly with your DualSense. Steam Input blocks this connection.
-> 1.  Open your Steam Library.
-> 2.  Right-click on **Session: Skate Sim** -> **Properties**.
-> 3.  Go to the **Controller** tab.
-> 4.  In the dropdown menu, select **Disable Steam Input**.
-
-*(If your controller light turns off, just press the PS button to reconnect it).*
-
+> 
+> 1. Open your Steam Library. 
+> 2. Right-click on **Session: Skate Sim** -> **Properties**. 
+> 3. Go to the **Controller** tab. 
+> 4. In the dropdown menu, select **Disable Steam Input**.
+> 
+> *(If your controller light turns off, just press the PS button to reconnect it).*
 ---
+
 
 
 ### 📥 Installation

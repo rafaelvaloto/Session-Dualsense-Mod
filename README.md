@@ -40,7 +40,7 @@ For this mod to work, the game must communicate directly with your DualSense. St
 
 ## 📥 Installation
 
-1.  Download the latest `session-dualsense-mod.zip` from **Releases**.
+1.  Download the latest `session-dualsense-mod.zip` from **[Releases](https://github.com/rafaelvaloto/Session-Dualsense-Mod/releases/tag/v0.0.10)**.
 
 2.  Navigate to your game folder:
    * **Steam:**

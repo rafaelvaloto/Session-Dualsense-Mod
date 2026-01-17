@@ -231,7 +231,7 @@ void InitMod()
 		(void**)&Original_GetRawInputDeviceInfoW
 	);
 
-	MessageBoxA(NULL, "Hooks IAT Instalados! DualSense camuflado.", "Mod Loaded", MB_OK);
+	// MessageBoxA(NULL, "Hooks IAT Instalados! DualSense camuflado.", "Mod Loaded", MB_OK);
 }
 
 std::atomic<bool> g_Running(false);
@@ -243,9 +243,6 @@ std::unique_ptr<TestDeviceRegistry> g_Registry;
 std::unique_ptr<ViGEmAdapter> g_ViGEmAdapter;
 #endif
 FInputContext g_LastInputState;
-const int32_t TargetDeviceId = 0;
-
-
 
 constexpr float kLowPassAlpha = 1.0f;
 constexpr float kOneMinusAlpha = 1.0f - kLowPassAlpha;
@@ -366,17 +363,16 @@ void AudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma
 			return;
 		}
 
-		// Configura filtros se ainda não foram configurados
 		if (!pData->bFiltersConfigured)
 		{
 			float sr = static_cast<float>(pDevice->sampleRate);
-			// Atenua frequências de metal/trilho (agudos metálicos costumam estar entre 3kHz e 6kHz)
-			pData->FilterRailLeft.ConfigurePeaking(sr, 4500.0f, 1.0f, -10.0f);
-			pData->FilterRailRight.ConfigurePeaking(sr, 4500.0f, 1.0f, -10.0f);
 
-			// Atenua frequências de concreto/asfalto (médios ruidosos costumam estar entre 800Hz e 2kHz)
-			pData->FilterConcreteLeft.ConfigurePeaking(sr, 1200.0f, 0.7f, -6.0f);
-			pData->FilterConcreteRight.ConfigurePeaking(sr, 1200.0f, 0.7f, -6.0f);
+			pData->FilterRailLeft.ConfigurePeaking(sr, 4500.0f, 1.0f, 5.0f);
+			pData->FilterRailRight.ConfigurePeaking(sr, 4500.0f, 1.0f, 5.0f);
+			pData->FilterConcreteLeft.ConfigurePeaking(sr, 1200.0f, 0.7f, 6.0f);
+			pData->FilterConcreteRight.ConfigurePeaking(sr, 1200.0f, 0.7f, 6.0f);
+			pData->FilterConcreteLeft.ConfigurePeaking(sr, 200.0f, 0.7f, 5.0f);
+			pData->FilterConcreteRight.ConfigurePeaking(sr, 200.0f, 0.7f, 5.0f);
 
 			pData->bFiltersConfigured = true;
 		}
@@ -426,14 +422,15 @@ void AudioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma
 			return;
 		}
 
-		// Aplica filtros no áudio vindo de arquivo (se houver)
 		if (!pData->bFiltersConfigured)
 		{
 			float sr = static_cast<float>(pDevice->sampleRate);
-			pData->FilterRailLeft.ConfigurePeaking(sr, 4500.0f, 1.0f, -10.0f);
-			pData->FilterRailRight.ConfigurePeaking(sr, 4500.0f, 1.0f, -10.0f);
-			pData->FilterConcreteLeft.ConfigurePeaking(sr, 1200.0f, 0.7f, -6.0f);
-			pData->FilterConcreteRight.ConfigurePeaking(sr, 1200.0f, 0.7f, -6.0f);
+			pData->FilterRailLeft.ConfigurePeaking(sr, 4500.0f, 1.0f, 5.0f);
+			pData->FilterRailRight.ConfigurePeaking(sr, 4500.0f, 1.0f, 5.0f);
+			pData->FilterConcreteLeft.ConfigurePeaking(sr, 1200.0f, 0.7f, 6.0f);
+			pData->FilterConcreteRight.ConfigurePeaking(sr, 1200.0f, 0.7f, 6.0f);
+			pData->FilterConcreteLeft.ConfigurePeaking(sr, 200.0f, 0.7f, 5.0f);
+			pData->FilterConcreteRight.ConfigurePeaking(sr, 200.0f, 0.7f, 5.0f);
 			pData->bFiltersConfigured = true;
 		}
 
@@ -649,7 +646,7 @@ void AudioLoop()
 {
 	std::cout << "[AppDLL] Audio Loop Started." << std::endl;
 
-	ISonyGamepad* Gamepad = g_Registry->GetLibrary(TargetDeviceId);
+	ISonyGamepad* Gamepad = g_Registry->GetLibrary(0);
 	while (g_Running)
 	{
 		if (Gamepad && Gamepad->IsConnected())
@@ -749,32 +746,26 @@ void InputLoop()
 	while (g_Running)
 	{
 		float DeltaTime = 0.0166f;
-		ISonyGamepad* Gamepad = g_Registry->GetLibrary(TargetDeviceId);
+		ISonyGamepad* Gamepad = g_Registry->GetLibrary(0);
 		if (!Gamepad)
 		{
 			g_Registry->PlugAndPlay(DeltaTime);
 		}
 
-		if (Gamepad && Gamepad->IsConnected())
+		if (ISonyGamepad* Gamepad = g_Registry->GetLibrary(0))
 		{
 			Gamepad->DualSenseSettings(1, 1, 1, 0, 30, 0xFC, 0x00, 0x00);
 			auto Trigger = Gamepad->GetIGamepadTrigger();
 			if (Trigger)
 			{
-				Trigger->SetResistance(0, 255, EDSGamepadHand::AnyHand);
+				Trigger->SetResistance(0, 0xff, EDSGamepadHand::AnyHand);
 			}
-
-			DSCoreTypes::FDSColor colors[] = {
-				{255, 0, 0},   // Red
-				{0, 255, 0},   // Green
-				{0, 0, 255},   // Blue
-				{200, 160, 80} // Config (Session: Skater)
-			};
-			Gamepad->SetLightbar(colors[3]);
+			Gamepad->SetLightbar({200, 160, 80});
 			Gamepad->UpdateOutput();
+		}
 
-			Gamepad->UpdateInput(DeltaTime);
-
+		if (Gamepad && Gamepad->IsConnected())
+		{
 			FDeviceContext* DeviceContext = Gamepad->GetMutableDeviceContext();
 			if (DeviceContext)
 			{
@@ -784,6 +775,7 @@ void InputLoop()
 #ifdef USE_VIGEM
 					if (g_ViGEmAdapter && Gamepad->GetConnectionType() == EDSDeviceConnection::Bluetooth)
 					{
+						Gamepad->UpdateInput(DeltaTime);
 						g_ViGEmAdapter->Update(*CurrentState);
 					}
 #endif
@@ -803,7 +795,7 @@ void InputLoop()
 			static int NullCounter = 0;
 			if (++NullCounter % 60 == 0)
 			{
-				std::cout << "[AppDLL] Gamepad Object is NULL for ID " << TargetDeviceId << std::endl;
+				std::cout << "[AppDLL] Gamepad Object is NULL for ID " << g_Registry->Policy.deviceId << std::endl;
 			}
 		}
 
@@ -847,9 +839,6 @@ void StartServiceThread()
 	}
 #endif
 
-	if (g_Registry)
-		g_Registry.reset();
-
 	CreateConsole();
 
 	std::cout << "[AppDLL] Service Thread Starting..." << std::endl;
@@ -869,30 +858,32 @@ void StartServiceThread()
 	std::cout << "[System] Requesting Immediate Detection..." << std::endl;
 	std::cout.flush();
 
-	g_Registry->RequestImmediateDetection();
-
 	ISonyGamepad* Gamepad = nullptr;
-	for (int i = 0; i < 100; ++i)
+	g_Registry->RequestImmediateDetection();
+	while (true)
 	{
-		// load connection
 		g_Registry->PlugAndPlay(0.016f);
-		Gamepad = g_Registry->GetLibrary(0);
-		if (Gamepad && Gamepad->IsConnected())
+		if (ISonyGamepad* Gamepad = g_Registry->GetLibrary(0))
 		{
+			Gamepad->DualSenseSettings(1, 1, 1, 0, 30, 0xFC, 0x00, 0x00);
+			auto Trigger = Gamepad->GetIGamepadTrigger();
+			if (Trigger)
+			{
+				Trigger->SetResistance(0, 0xff, EDSGamepadHand::AnyHand);
+			}
+			Gamepad->SetLightbar({200, 160, 80});
+			Gamepad->UpdateOutput();
 			break;
 		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 
 #ifdef USE_VIGEM
-	if (Gamepad)
+	std::cout << "[System] Initializing ViGEm Adapter (Bluetooth Mode)..." << std::endl;
+	g_ViGEmAdapter = std::make_unique<ViGEmAdapter>();
+	if (!g_ViGEmAdapter->Initialize())
 	{
-		std::cout << "[System] Initializing ViGEm Adapter (Bluetooth Mode)..." << std::endl;
-		g_ViGEmAdapter = std::make_unique<ViGEmAdapter>();
-		if (!g_ViGEmAdapter->Initialize())
-		{
-			std::cerr << "[System] ViGEm Adapter failed to initialize. Xbox Emulation will not be available." << std::endl;
-		}
+		std::cerr << "[System] ViGEm Adapter failed to initialize. Xbox Emulation will not be available." << std::endl;
 	}
 #endif
 
@@ -950,7 +941,7 @@ __declspec(dllexport) bool GetGamepadStateSafe(int ControllerId, FInputContext* 
 	if (!g_Registry)
 		return false;
 
-	ISonyGamepad* Gamepad = g_Registry->GetLibrary(ControllerId);
+	ISonyGamepad* Gamepad = g_Registry->GetLibrary(0);
 	if (Gamepad && Gamepad->IsConnected())
 	{
 		FDeviceContext* DeviceContext = Gamepad->GetMutableDeviceContext();

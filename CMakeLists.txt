@@ -26,6 +26,8 @@ if(WIN32)
     )
 
     set(GAMEPAD_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/Gamepad-Core")
+    set(BUILD_TESTS OFF CACHE BOOL "Build integration tests" FORCE)
+    add_subdirectory(${GAMEPAD_CORE_DIR})
 
     add_library(session-dualsense-mod SHARED ${SOURCES})
 

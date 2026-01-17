@@ -163,11 +163,10 @@ void InitMod() {
     );
 
     if (success) {
-        // Log de sucesso
-        MessageBoxA(NULL, "Hook IAT Instalado! DualSense escondido.", "Mod Loaded", MB_OK);
+        // MessageBoxA(NULL, "Hook IAT Instalado! DualSense escondido.", "Mod Loaded", MB_OK);
+    	std::cout << "Hook IAT Instaled! DualSense hide." << std::endl;
     } else {
-        // Fallback: Se falhar, talvez a função seja importada com outro nome ou o hook falhou
-        MessageBoxA(NULL, "Falha ao instalar IAT Hook.", "Mod Error", MB_OK);
+    	std::cout << "Failed to install IAT Hook." << std::endl;
     }
 }
 

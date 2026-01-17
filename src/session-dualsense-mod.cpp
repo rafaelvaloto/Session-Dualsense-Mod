@@ -29,209 +29,146 @@ using TestHardwareInfo = Ftest_windows_platform::Ftest_windows_hardware;
 
 using namespace GamepadCore;
 using TestDeviceRegistry = GamepadCore::TBasicDeviceRegistry<Ftest_device_registry_policy>;
-
-// Definições dos ponteiros das funções originais
-typedef UINT (WINAPI*PGETRAWINPUTDEVICELIST)(PRAWINPUTDEVICELIST, PUINT, UINT);
-typedef UINT (WINAPI*PGETRAWINPUTDEVICEINFOA)(HANDLE, UINT, LPVOID, PUINT);
-typedef UINT (WINAPI*PGETRAWINPUTDEVICEINFOW)(HANDLE, UINT, LPVOID, PUINT);
-
+// Definição do ponteiro da função original
+typedef UINT (WINAPI* PGETRAWINPUTDEVICELIST)(PRAWINPUTDEVICELIST, PUINT, UINT);
 PGETRAWINPUTDEVICELIST Original_GetRawInputDeviceList = NULL;
-PGETRAWINPUTDEVICEINFOA Original_GetRawInputDeviceInfoA = NULL;
-PGETRAWINPUTDEVICEINFOW Original_GetRawInputDeviceInfoW = NULL;
 
 // O VID que queremos esconder (Sony DualSense)
 const int HID_VID_SONY = 0x054C;
 
 // -----------------------------------------------------------------------------
-// FUNÇÕES MODIFICADAS (OS DETOURS)
+// SUA FUNÇÃO MODIFICADA (O DETOUR)
 // -----------------------------------------------------------------------------
+UINT WINAPI My_GetRawInputDeviceList(PRAWINPUTDEVICELIST pRawInputDeviceList, PUINT puiNumDevices, UINT cbSize) {
 
-UINT WINAPI My_GetRawInputDeviceInfoA(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize)
-{
-	auto pFunc = Original_GetRawInputDeviceInfoA ? Original_GetRawInputDeviceInfoA : GetRawInputDeviceInfoA;
-	UINT result = pFunc(hDevice, uiCommand, pData, pcbSize);
+    // 1. Chama a função original do Windows para pegar a lista real
+    // Se Original_GetRawInputDeviceList for NULL, algo deu errado no Hook, tenta chamar direto da API
+    auto pFunc = Original_GetRawInputDeviceList ? Original_GetRawInputDeviceList : GetRawInputDeviceList;
 
-	if (uiCommand == RIDI_DEVICEINFO && result != (UINT)-1 && pData != NULL)
-	{
-		RID_DEVICE_INFO* info = (RID_DEVICE_INFO*)pData;
-		if (info->cbSize == sizeof(RID_DEVICE_INFO) && info->dwType == RIM_TYPEHID)
-		{
-			if (info->hid.dwVendorId == HID_VID_SONY)
-			{
-				// Mentimos o VID para a Unreal não reconhecer como DualSense
-				info->hid.dwVendorId = 0xDEAD;
-			}
-		}
-	}
-	return result;
-}
+    UINT result = pFunc(pRawInputDeviceList, puiNumDevices, cbSize);
 
-UINT WINAPI My_GetRawInputDeviceInfoW(HANDLE hDevice, UINT uiCommand, LPVOID pData, PUINT pcbSize)
-{
-	auto pFunc = Original_GetRawInputDeviceInfoW ? Original_GetRawInputDeviceInfoW : GetRawInputDeviceInfoW;
-	UINT result = pFunc(hDevice, uiCommand, pData, pcbSize);
+    // Se for erro ou apenas consulta de tamanho (NULL), retorna o original
+    if (result == (UINT)-1 || pRawInputDeviceList == NULL) {
+        return result;
+    }
 
-	if (uiCommand == RIDI_DEVICEINFO && result != (UINT)-1 && pData != NULL)
-	{
-		RID_DEVICE_INFO* info = (RID_DEVICE_INFO*)pData;
-		if (info->cbSize == sizeof(RID_DEVICE_INFO) && info->dwType == RIM_TYPEHID)
-		{
-			if (info->hid.dwVendorId == HID_VID_SONY)
-			{
-				info->hid.dwVendorId = 0xDEAD;
-			}
-		}
-	}
-	return result;
-}
+    // 2. Filtragem: Vamos reconstruir a lista sem o DualSense
+    UINT realCount = *puiNumDevices;
+    std::vector<RAWINPUTDEVICELIST> cleanList;
 
-UINT WINAPI My_GetRawInputDeviceList(PRAWINPUTDEVICELIST pRawInputDeviceList, PUINT puiNumDevices, UINT cbSize)
-{
-	auto pFunc = Original_GetRawInputDeviceList ? Original_GetRawInputDeviceList : GetRawInputDeviceList;
+    for (UINT i = 0; i < realCount; i++) {
+        RAWINPUTDEVICELIST& device = pRawInputDeviceList[i];
+        bool bIsBlocked = false;
 
-	UINT result = pFunc(pRawInputDeviceList, puiNumDevices, cbSize);
+        if (device.dwType == RIM_TYPEHID) {
+            RID_DEVICE_INFO info;
+            info.cbSize = sizeof(RID_DEVICE_INFO);
+            UINT size = sizeof(RID_DEVICE_INFO);
 
-	if (result == (UINT)-1 || pRawInputDeviceList == NULL)
-	{
-		return result;
-	}
+            // Verifica o VID
+            if (GetRawInputDeviceInfoA(device.hDevice, RIDI_DEVICEINFO, &info, &size) > 0) {
+                if (info.hid.dwVendorId == HID_VID_SONY) {
+                    bIsBlocked = true; // É o DualSense, marca para não incluir
+                }
+            }
+        }
 
-	UINT realCount = *puiNumDevices;
-	std::vector<RAWINPUTDEVICELIST> cleanList;
+        if (!bIsBlocked) {
+            cleanList.push_back(device);
+        }
+    }
 
-	for (UINT i = 0; i < realCount; i++)
-	{
-		RAWINPUTDEVICELIST& device = pRawInputDeviceList[i];
-		bool bIsBlocked = false;
+    // 3. Sobrescreve o buffer original com a lista limpa
+    UINT finalCount = (UINT)cleanList.size();
+    for (UINT i = 0; i < finalCount; i++) {
+        pRawInputDeviceList[i] = cleanList[i];
+    }
 
-		if (device.dwType == RIM_TYPEHID)
-		{
-			RID_DEVICE_INFO info;
-			info.cbSize = sizeof(RID_DEVICE_INFO);
-			UINT size = sizeof(RID_DEVICE_INFO);
+    // Atualiza o contador para a Unreal não ler lixo de memória
+    *puiNumDevices = finalCount;
 
-			if (GetRawInputDeviceInfoA(device.hDevice, RIDI_DEVICEINFO, &info, &size) > 0)
-			{
-				if (info.hid.dwVendorId == HID_VID_SONY)
-				{
-					bIsBlocked = true;
-				}
-			}
-		}
-
-		if (!bIsBlocked)
-		{
-			cleanList.push_back(device);
-		}
-	}
-
-	UINT finalCount = (UINT)cleanList.size();
-	for (UINT i = 0; i < finalCount; i++)
-	{
-		pRawInputDeviceList[i] = cleanList[i];
-	}
-
-	*puiNumDevices = finalCount;
-	return finalCount;
+    return finalCount;
 }
 
 // -----------------------------------------------------------------------------
 // LÓGICA DE IAT HOOKING (MANUAL)
 // -----------------------------------------------------------------------------
-bool InstallIATHook(const char* dllName, const char* funcName, void* newFunc, void** originalFunc)
-{
-	// Pega o módulo principal do processo (o .exe do jogo)
-	HMODULE hModule = GetModuleHandle(NULL);
-	if (!hModule)
-		return false;
+bool InstallIATHook(const char* dllName, const char* funcName, void* newFunc, void** originalFunc) {
+    // Pega o módulo principal do processo (o .exe do jogo)
+    HMODULE hModule = GetModuleHandle(NULL);
+    if (!hModule) return false;
 
-	// Pega os cabeçalhos do PE (Portable Executable)
-	PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
-	PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE*)hModule + pDosHeader->e_lfanew);
+    // Pega os cabeçalhos do PE (Portable Executable)
+    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
+    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE*)hModule + pDosHeader->e_lfanew);
 
-	// Localiza a Tabela de Importação (Import Directory)
-	PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE*)hModule +
-	                                                                  pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+    // Localiza a Tabela de Importação (Import Directory)
+    PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE*)hModule +
+        pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
 
-	if (pImportDesc == (PIMAGE_IMPORT_DESCRIPTOR)pNtHeaders)
-		return false;
+    if (pImportDesc == (PIMAGE_IMPORT_DESCRIPTOR)pNtHeaders) return false;
 
-	// Percorre todas as DLLs importadas pelo jogo
-	while (pImportDesc->Name)
-	{
-		const char* currentDllName = (const char*)((BYTE*)hModule + pImportDesc->Name);
+    // Percorre todas as DLLs importadas pelo jogo
+    while (pImportDesc->Name) {
+        const char* currentDllName = (const char*)((BYTE*)hModule + pImportDesc->Name);
 
-		// Verifica se é a DLL que procuramos (ex: "USER32.dll")
-		if (_stricmp(currentDllName, dllName) == 0)
-		{
+        // Verifica se é a DLL que procuramos (ex: "USER32.dll")
+        if (_stricmp(currentDllName, dllName) == 0) {
 
-			// Pega a Thunk Table (Lista de funções importadas)
-			PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE*)hModule + pImportDesc->FirstThunk);
-			PIMAGE_THUNK_DATA pOrgThunk = (PIMAGE_THUNK_DATA)((BYTE*)hModule + pImportDesc->OriginalFirstThunk);
+            // Pega a Thunk Table (Lista de funções importadas)
+            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE*)hModule + pImportDesc->FirstThunk);
+            PIMAGE_THUNK_DATA pOrgThunk = (PIMAGE_THUNK_DATA)((BYTE*)hModule + pImportDesc->OriginalFirstThunk);
 
-			while (pThunk->u1.Function && pOrgThunk->u1.AddressOfData)
-			{
-				// Pega o nome da função
-				PIMAGE_IMPORT_BY_NAME pImport = (PIMAGE_IMPORT_BY_NAME)((BYTE*)hModule + pOrgThunk->u1.AddressOfData);
+            while (pThunk->u1.Function && pOrgThunk->u1.AddressOfData) {
+                // Pega o nome da função
+                PIMAGE_IMPORT_BY_NAME pImport = (PIMAGE_IMPORT_BY_NAME)((BYTE*)hModule + pOrgThunk->u1.AddressOfData);
 
-				if (strcmp(pImport->Name, funcName) == 0)
-				{
-					// ACHAMOS!
+                if (strcmp(pImport->Name, funcName) == 0) {
+                    // ACHAMOS!
 
-					// Salva o endereço original para podermos chamar depois
-					if (originalFunc)
-						*originalFunc = (void*)pThunk->u1.Function;
+                    // Salva o endereço original para podermos chamar depois
+                    if (originalFunc) *originalFunc = (void*)pThunk->u1.Function;
 
-					// Precisamos mudar a permissão da memória para escrever nela (geralmente é Read-Only)
-					DWORD oldProtect;
-					VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), PAGE_READWRITE, &oldProtect);
+                    // Precisamos mudar a permissão da memória para escrever nela (geralmente é Read-Only)
+                    DWORD oldProtect;
+                    VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), PAGE_READWRITE, &oldProtect);
 
-					// A TROCA: Substitui o ponteiro original pelo nosso
-					pThunk->u1.Function = (uintptr_t)newFunc;
+                    // A TROCA: Substitui o ponteiro original pelo nosso
+                    pThunk->u1.Function = (uintptr_t)newFunc;
 
-					// Restaura a permissão original
-					VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), oldProtect, &oldProtect);
+                    // Restaura a permissão original
+                    VirtualProtect(&pThunk->u1.Function, sizeof(uintptr_t), oldProtect, &oldProtect);
 
-					return true;
-				}
-				pThunk++;
-				pOrgThunk++;
-			}
-		}
-		pImportDesc++;
-	}
-	return false;
+                    return true;
+                }
+                pThunk++;
+                pOrgThunk++;
+            }
+        }
+        pImportDesc++;
+    }
+    return false;
 }
 
 // -----------------------------------------------------------------------------
 // FUNÇÃO DE INICIALIZAÇÃO
 // -----------------------------------------------------------------------------
-void InitMod()
-{
-	// 1. Hook GetRawInputDeviceList para esconder o dispositivo da lista
-	InstallIATHook(
-		"USER32.dll",
-		"GetRawInputDeviceList",
-		(void*)My_GetRawInputDeviceList,
-		(void**)&Original_GetRawInputDeviceList
-		);
+void InitMod() {
+    // Instala o hook no USER32.dll procurando por GetRawInputDeviceList
+    bool success = InstallIATHook(
+        "USER32.dll",
+        "GetRawInputDeviceList",
+        (void*)My_GetRawInputDeviceList,
+        (void**)&Original_GetRawInputDeviceList
+    );
 
-	// 2. Hook GetRawInputDeviceInfo para esconder o VendorID original
-	InstallIATHook(
-		"USER32.dll",
-		"GetRawInputDeviceInfoA",
-		(void*)My_GetRawInputDeviceInfoA,
-		(void**)&Original_GetRawInputDeviceInfoA
-		);
-
-	InstallIATHook(
-		"USER32.dll",
-		"GetRawInputDeviceInfoW",
-		(void*)My_GetRawInputDeviceInfoW,
-		(void**)&Original_GetRawInputDeviceInfoW
-	);
-
-	// MessageBoxA(NULL, "Hooks IAT Instalados! DualSense camuflado.", "Mod Loaded", MB_OK);
+    if (success) {
+        // Log de sucesso
+        MessageBoxA(NULL, "Hook IAT Instalado! DualSense escondido.", "Mod Loaded", MB_OK);
+    } else {
+        // Fallback: Se falhar, talvez a função seja importada com outro nome ou o hook falhou
+        MessageBoxA(NULL, "Falha ao instalar IAT Hook.", "Mod Error", MB_OK);
+    }
 }
 
 std::atomic<bool> g_Running(false);
@@ -616,8 +553,6 @@ void ConsumeHapticsQueue(IGamepadAudioHaptics* AudioHaptics, AudioCallbackData& 
 	else
 	{
 		std::lock_guard<std::mutex> lock(callbackData.usbMutex);
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
 		std::vector<std::int16_t> allSamples;
 		allSamples.reserve(2048 * 2);
 
@@ -635,6 +570,7 @@ void ConsumeHapticsQueue(IGamepadAudioHaptics* AudioHaptics, AudioCallbackData& 
 		{
 			AudioHaptics->AudioHapticUpdate(allSamples);
 		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(16));
 	}
 }
 
@@ -654,7 +590,7 @@ void AudioLoop()
 			IGamepadAudioHaptics* AudioHaptics = Gamepad->GetIGamepadHaptics();
 			if (AudioHaptics)
 			{
-				if (!g_AudioDeviceInitialized || (g_AudioDeviceInitialized && ma_device_get_state(&g_AudioDevice) == ma_device_state_stopped))
+				if (!g_AudioDeviceInitialized)
 				{
 					if (g_AudioDeviceInitialized)
 					{
@@ -752,7 +688,7 @@ void InputLoop()
 			g_Registry->PlugAndPlay(DeltaTime);
 		}
 
-		if (ISonyGamepad* Gamepad = g_Registry->GetLibrary(0))
+		if (Gamepad)
 		{
 			Gamepad->DualSenseSettings(1, 1, 1, 0, 30, 0xFC, 0x00, 0x00);
 			auto Trigger = Gamepad->GetIGamepadTrigger();
@@ -830,16 +766,9 @@ void StartServiceThread()
 	if (g_ServiceInitialized.exchange(true))
 		return;
 
-
-#ifdef USE_VIGEM
-	if (g_ViGEmAdapter)
-	{
-		g_ViGEmAdapter->Shutdown();
-		g_ViGEmAdapter.reset();
-	}
-#endif
-
 	CreateConsole();
+
+	InitMod();
 
 	std::cout << "[AppDLL] Service Thread Starting..." << std::endl;
 	std::cout.flush();
@@ -858,12 +787,10 @@ void StartServiceThread()
 	std::cout << "[System] Requesting Immediate Detection..." << std::endl;
 	std::cout.flush();
 
-	ISonyGamepad* Gamepad = nullptr;
-	g_Registry->RequestImmediateDetection();
 	while (true)
 	{
-		g_Registry->PlugAndPlay(0.016f);
-		if (ISonyGamepad* Gamepad = g_Registry->GetLibrary(0))
+		ISonyGamepad* Gamepad = g_Registry->GetLibrary(0);
+		if (Gamepad)
 		{
 			Gamepad->DualSenseSettings(1, 1, 1, 0, 30, 0xFC, 0x00, 0x00);
 			auto Trigger = Gamepad->GetIGamepadTrigger();
@@ -872,30 +799,41 @@ void StartServiceThread()
 				Trigger->SetResistance(0, 0xff, EDSGamepadHand::AnyHand);
 			}
 			Gamepad->SetLightbar({200, 160, 80});
-			Gamepad->UpdateOutput();
+
 			break;
 		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+		g_Registry->PlugAndPlay(2.0f);
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	}
 
+	ISonyGamepad* Gamepad = g_Registry->GetLibrary(0);
+
 #ifdef USE_VIGEM
-	std::cout << "[System] Initializing ViGEm Adapter (Bluetooth Mode)..." << std::endl;
-	g_ViGEmAdapter = std::make_unique<ViGEmAdapter>();
-	if (!g_ViGEmAdapter->Initialize())
+	if (Gamepad)
 	{
-		std::cerr << "[System] ViGEm Adapter failed to initialize. Xbox Emulation will not be available." << std::endl;
+		std::cout << "[System] Initializing ViGEm Adapter (Bluetooth Mode)..." << std::endl;
+		g_ViGEmAdapter = std::make_unique<ViGEmAdapter>();
+		if (!g_ViGEmAdapter->Initialize())
+		{
+			std::cerr << "[System] ViGEm Adapter failed to initialize. Xbox Emulation will not be available." << std::endl;
+		}
 	}
 #endif
 
+
 	std::cout << "[System] Waiting for controller connection via USB/BT..." << std::endl;
 	std::cout.flush();
+
+	if (Gamepad)
+	{
+		Gamepad->UpdateOutput();
+	}
 
 	g_Running = true;
 
 	std::cout << "[AppDLL] Gamepad Service Started." << std::endl;
 	std::cout.flush();
-
-	InitMod();
 
 	g_AudioThread = std::thread(AudioLoop);
 
@@ -934,60 +872,6 @@ __declspec(dllexport) void StopGamepadService()
 	g_Running = false;
 }
 
-__declspec(dllexport) bool GetGamepadStateSafe(int ControllerId, FInputContext* OutState)
-{
-	if (!OutState)
-		return false;
-	if (!g_Registry)
-		return false;
-
-	ISonyGamepad* Gamepad = g_Registry->GetLibrary(0);
-	if (Gamepad && Gamepad->IsConnected())
-	{
-		FDeviceContext* DeviceContext = Gamepad->GetMutableDeviceContext();
-		if (DeviceContext)
-		{
-			FInputContext* InState = DeviceContext->GetInputState();
-			if (!InState)
-				return false;
-
-			OutState->bCross = InState->bCross;
-			OutState->bCircle = InState->bCircle;
-			OutState->bTriangle = InState->bTriangle;
-			OutState->bSquare = InState->bSquare;
-			OutState->bDpadDown = InState->bDpadDown;
-			OutState->bDpadLeft = InState->bDpadLeft;
-			OutState->bDpadRight = InState->bDpadRight;
-			OutState->bDpadUp = InState->bDpadUp;
-			OutState->RightAnalog = InState->RightAnalog;
-			OutState->LeftAnalog = InState->LeftAnalog;
-			OutState->bLeftAnalogDown = InState->bLeftAnalogDown;
-			OutState->bLeftAnalogLeft = InState->bLeftAnalogLeft;
-			OutState->bLeftAnalogRight = InState->bLeftAnalogRight;
-			OutState->bLeftAnalogUp = InState->bLeftAnalogUp;
-			OutState->bRightAnalogDown = InState->bRightAnalogDown;
-			OutState->bRightAnalogLeft = InState->bRightAnalogLeft;
-			OutState->bRightAnalogRight = InState->bRightAnalogRight;
-			OutState->bRightAnalogUp = InState->bRightAnalogUp;
-			OutState->bLeftShoulder = InState->bLeftShoulder;
-			OutState->bRightShoulder = InState->bRightShoulder;
-			OutState->LeftTriggerAnalog = InState->LeftTriggerAnalog;
-			OutState->RightTriggerAnalog = InState->RightTriggerAnalog;
-			OutState->bLeftTriggerThreshold = InState->bLeftTriggerThreshold;
-			OutState->bRightTriggerThreshold = InState->bRightTriggerThreshold;
-			OutState->bStart = InState->bStart;
-			OutState->bShare = InState->bShare;
-			OutState->bMute = InState->bMute;
-			OutState->bPSButton = InState->bPSButton;
-			OutState->bTouch = InState->bTouch;
-			OutState->bLeftStick = InState->bLeftStick;
-			OutState->bRightStick = InState->bRightStick;
-			OutState->BatteryLevel = InState->BatteryLevel;
-			return true;
-		}
-	}
-	return false;
-}
 }
 
 #ifndef BUILDING_PROXY_DLL
@@ -998,7 +882,21 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 		case DLL_PROCESS_ATTACH: StartGamepadService();
 			break;
 
-		case DLL_PROCESS_DETACH: g_Running = false;
+		case DLL_PROCESS_DETACH:
+			g_Running = false;
+
+#ifdef USE_VIGEM
+			if (g_ViGEmAdapter)
+			{
+				g_ViGEmAdapter->Shutdown();
+				g_ViGEmAdapter.reset();
+			}
+#endif
+
+			if (g_Registry)
+			{
+				g_Registry.reset();
+			}
 
 			if (lpReserved == nullptr)
 			{

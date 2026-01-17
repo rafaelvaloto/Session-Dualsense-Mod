@@ -62,14 +62,12 @@ int main() {
         std::cout << "  Define color: R=" << (int)color.R << " G=" << (int)color.G << " B=" << (int)color.B << std::endl;
         Gamepad->SetLightbar(color);
         Gamepad->UpdateOutput();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // 5. Teste de Player LED
     std::cout << "[Test] Testing Player LED..." << std::endl;
     Gamepad->SetPlayerLed(EDSPlayer::One, 255);
     Gamepad->UpdateOutput();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // 6. Teste de Gatilhos Adaptáveis (Resistência)
     std::cout << "[Test] Applying resistance to the triggers (press L2/R2 to test)..." << std::endl;

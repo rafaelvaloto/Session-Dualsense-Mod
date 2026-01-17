@@ -41,6 +41,10 @@ This mod brings **native DualSense support** to Session: Skate Sim on PC. It com
 
 > [!IMPORTANT]
 > **Prerequisite:** You must download and install **[ViGEmBus](https://github.com/nefarius/ViGEmBus/releases)** first. This is required for virtual controller input emulation.
+>
+> Note: You do not need to configure ViGEmBus in any way; simply installing it is sufficient.
+
+
 
 1.  Download the latest `session-dualsense-mod.zip` from **[Releases](https://github.com/rafaelvaloto/Session-Dualsense-Mod/releases/tag/v0.0.10)**.
 
@@ -69,7 +73,7 @@ This mod brings **native DualSense support** to Session: Skate Sim on PC. It com
 
 5.  Connect your DualSense, launch the game, and enjoy!
 
-## 🎧 Recommended Audio Settings (Critical for Haptics)
+## 🎧 Recommended Audio Settings
 Since this mod uses **Audio-Based Haptics**, the controller's vibration is driven directly by the game's sound frequency. To feel the texture of the ground (wood, concrete, brick) clearly, follow these steps:
 
 1.  Go to **Options > Audio**.

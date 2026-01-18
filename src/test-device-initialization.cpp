@@ -62,6 +62,7 @@ int main() {
         std::cout << "  Define color: R=" << (int)color.R << " G=" << (int)color.G << " B=" << (int)color.B << std::endl;
         Gamepad->SetLightbar(color);
         Gamepad->UpdateOutput();
+    	std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 
     // 5. Teste de Player LED
@@ -78,7 +79,7 @@ int main() {
         Gamepad->UpdateOutput();
         
         std::cout << "  Applied resistance. Waiting 5 seconds..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+    	std::this_thread::sleep_for(std::chrono::seconds(5));
         
         std::cout << "  Clearing the effects of triggers..." << std::endl;
         Trigger->StopTrigger(EDSGamepadHand::Left);

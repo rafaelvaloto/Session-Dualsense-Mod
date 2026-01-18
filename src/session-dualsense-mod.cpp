@@ -673,11 +673,11 @@ void AudioLoop()
 	std::cout << "[AppDLL] Audio Loop Stopped." << std::endl;
 }
 
-
 void InputLoop()
 {
 	std::cout << "[AppDLL] Input Loop Started." << std::endl;
 
+	uint64_t FrameCounter = 0;
 	while (g_Running)
 	{
 		float DeltaTime = 0.0166f;
@@ -687,16 +687,25 @@ void InputLoop()
 			g_Registry->PlugAndPlay(DeltaTime);
 		}
 
+
 		if (Gamepad)
 		{
-			Gamepad->DualSenseSettings(1, 1, 1, 0, 30, 0xFC, 0x00, 0x00);
-			auto Trigger = Gamepad->GetIGamepadTrigger();
-			if (Trigger)
+			if (FrameCounter % 50 == 0)
 			{
-				Trigger->SetResistance(0, 0xff, EDSGamepadHand::AnyHand);
+				Gamepad->DualSenseSettings(1, 1, 1, 0, 30, 0xFC, 0x00, 0x00);
+				auto Trigger = Gamepad->GetIGamepadTrigger();
+				if (Trigger)
+				{
+					Trigger->SetResistance(0, 0xff, EDSGamepadHand::AnyHand);
+				}
+				Gamepad->SetLightbar({200, 160, 80});
+				Gamepad->UpdateOutput();
 			}
-			Gamepad->SetLightbar({200, 160, 80});
-			Gamepad->UpdateOutput();
+		}
+
+		if (Gamepad && Gamepad->GetConnectionType() == EDSDeviceConnection::Bluetooth)
+		{
+			Gamepad->UpdateInput(DeltaTime);
 		}
 
 		if (Gamepad && Gamepad->IsConnected())
@@ -710,20 +719,12 @@ void InputLoop()
 #ifdef USE_VIGEM
 					if (g_ViGEmAdapter && Gamepad->GetConnectionType() == EDSDeviceConnection::Bluetooth)
 					{
-						Gamepad->UpdateInput(DeltaTime);
 						g_ViGEmAdapter->Update(*CurrentState);
 					}
 #endif
 				}
 			}
-		}
-		else if (Gamepad)
-		{
-			static int ConnCounter = 0;
-			if (++ConnCounter % 60 == 0)
-			{
-				std::cout << "[AppDLL] Gamepad Object exists but IsConnected() is FALSE" << std::endl;
-			}
+
 		}
 		else
 		{
@@ -734,7 +735,7 @@ void InputLoop()
 			}
 		}
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		FrameCounter++;
 	}
 
 	std::cout << "[AppDLL] Input Loop Stopped." << std::endl;

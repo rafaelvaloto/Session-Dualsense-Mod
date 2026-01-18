@@ -15,6 +15,16 @@
 </div>
 
 
+## 🛠️ Recent Fixes
+
+> [!IMPORTANT]
+> **Update Recommended:** Please update your mod to **v0.0.13** to ensure the best performance and fix critical Bluetooth communication issues.
+
+### Bluetooth Input Lag Fix (v0.0.13)
+- **Issue:** Fixed a performance bottleneck where an unnecessary `100ms` sleep interval was active during Bluetooth communication.
+- **Impact:** This delay was causing "input read accumulation," where the controller data was being processed slower than it was being received. This led to heavy input lag, "frozen" controls, and stuttering responses.
+- **Solution:** Removed the excessive sleep interval from the Bluetooth update loop, allowing real-time, fluid communication with the DualSense.
+
 This mod brings **native DualSense support** to Session: Skate Sim on PC. It communicates directly with the controller to provide next-gen features via Bluetooth or USB, without requiring DS4Windows or paid software.
 
 ## ✨ Features

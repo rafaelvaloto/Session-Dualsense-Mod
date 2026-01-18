@@ -31,8 +31,8 @@ if(WIN32)
 
     add_library(session-dualsense-mod SHARED ${SOURCES})
 
-    add_executable(test-initialization 
-        src/test_initialization.cpp
+    add_executable(test-device-initialization 
+        src/test-device-initialization.cpp
         src/Platform_Windows/test_windows_device_info.cpp
     )
 
@@ -52,7 +52,7 @@ if(WIN32)
 
     # Configuração de Bibliotecas (Lib)
     target_link_directories(session-dualsense-mod PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib)
-    target_link_directories(test-initialization PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+    target_link_directories(test-device-initialization PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
     # Linkagem de dependências
     target_link_libraries(session-dualsense-mod PRIVATE
@@ -68,14 +68,14 @@ if(WIN32)
         shlwapi
     )
 
-    target_include_directories(test-initialization PRIVATE
+    target_include_directories(test-device-initialization PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Platform_Windows
         ${GAMEPAD_CORE_DIR}/Source/Public
         ${GAMEPAD_CORE_DIR}/Examples
     )
 
-    target_link_libraries(test-initialization PRIVATE
+    target_link_libraries(test-device-initialization PRIVATE
         GamepadCore
         Setupapi
         Hid

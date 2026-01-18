@@ -690,7 +690,7 @@ void InputLoop()
 
 		if (Gamepad)
 		{
-			if (FrameCounter % 50 == 0)
+			if (FrameCounter % 100 == 0)
 			{
 				Gamepad->DualSenseSettings(1, 1, 1, 0, 30, 0xFC, 0x00, 0x00);
 				auto Trigger = Gamepad->GetIGamepadTrigger();
